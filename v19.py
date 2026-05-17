@@ -261,21 +261,28 @@ with tab2:
             
             bet_probs = get_bet_probs(ranked)
             
-            # --- 変更箇所 ---
-            # 的中判定用の buy_bets（文字列リスト）とは別に、表示用の buy_bets_disp を作成
+            # 的中判定用の buy_bets と、表示用の buy_bets_disp を作成
             buy_bets = [bp["bet"] for bp in bet_probs if bp["prob"] >= prob_threshold]
             buy_bets_disp = [f"{bp['bet']}({bp['prob']}%)" for bp in bet_probs if bp["prob"] >= prob_threshold]
-            # --------------
             
             if not has_result:
-                hit_str, payoff_disp, actual_result, hit_amount = "⏳", "-", "結果待ち" if buy_bets else "堅いので見送り", 0
+                hit_str, payoff_disp, actual_result_disp, hit_amount = "⏳", "-", "結果待ち" if buy_bets else "堅いので見送り", 0
             else:
                 actual_result = ""
+                actual_result_disp = ""
        
                 r1 = next((k for k, v in lane_to_rank.items() if str(v) == '1'), None)
                 r2 = next((k for k, v in lane_to_rank.items() if str(v) == '2'), None)
                 r3 = next((k for k, v in lane_to_rank.items() if str(v) == '3'), None)
-                if r1 and r2 and r3: actual_result = f"{r1}-{r2}-{r3}"
+                if r1 and r2 and r3: 
+                    actual_result = f"{r1}-{r2}-{r3}"
+                    
+                    # 結果の買い目が、AIの全予想の中で何%の確率だったかを取得して表示用文字列を作成
+                    actual_prob = next((bp["prob"] for bp in bet_probs if bp["bet"] == actual_result), None)
+                    if actual_prob is not None:
+                        actual_result_disp = f"{actual_result}({actual_prob}%)"
+                    else:
+                        actual_result_disp = actual_result
 
                 if not buy_bets:
                     hit_str, payoff_disp, hit_amount = "ー", f"({payoff})", 0
@@ -286,11 +293,8 @@ with tab2:
             
             return {
                 "日付": d, "場": venue_name, "R": r,
-                # --- 変更箇所 ---
-                # 表示用として buy_bets_disp を使用するように変更
                 "買い目": ", ".join(buy_bets_disp) if buy_bets_disp else "見", "点数": len(buy_bets), 
-                # --------------
-                "結果": actual_result, "的中": hit_str, "払戻金": payoff_disp, "_hit_amount": hit_amount
+                "結果": actual_result_disp, "的中": hit_str, "払戻金": payoff_disp, "_hit_amount": hit_amount
             }
             
         with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
@@ -316,6 +320,8 @@ with tab2:
                 ret_rate = total_return / total_invest * 100 if total_invest > 0 else 0
       
                 st.success(f"🔥 勝負レース: {len(bet_races)}件 (ガチガチ回避: {len([m for m in matches if m['点数']==0])}件)")
-                st.info(f"💰 **総投資**: {total_invest:,}円 / **総回収**: {total_return:,}円 (回収率: {ret_rate:.1f}%)")
+                
+                st.info(f"💰 **総投資**: {total_invest:,}円 / **総回収**: {total_return:,}円 (回収率: {ret_rate:.1f}% / **勝率(的中率)**: {hit_rate:.1f}%)")
+                
             disp_cols = ["日付", "場", "R", "買い目", "結果", "的中", "払戻金"]
             st.dataframe(df_bt[disp_cols], use_container_width=True)
